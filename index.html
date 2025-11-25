@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Family Device Tracker</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background-color: #F8F9FA;
+        color: #343A40;
+        margin: 0;
+        padding: 20px;
+        max-width: 600px;
+        margin: auto;
+    }
+    h1 {
+        text-align: center;
+        color: #007BFF;
+    }
+    label {
+        display: block;
+        margin-top: 10px;
+        font-weight: bold;
+    }
+    input, select, button {
+        width: 100%;
+        padding: 8px;
+        margin-top: 5px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+    button {
+        background-color: #007BFF;
+        color: white;
+        border: none;
+        cursor: pointer;
+        margin-top: 15px;
+    }
+    button:hover {
+        background-color: #0056b3;
+    }
+    .device-list {
+        margin-top: 20px;
+    }
+    .device-item {
+        background: white;
+        border: 1px solid #ddd;
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 4px;
+    }
+    .device-item p {
+        margin: 5px 0;
+    }
+    .delete-btn {
+        background-color: #dc3545;
+        color: white;
+        border: none;
+        padding: 5px 10px;
+        cursor: pointer;
+        border-radius: 4px;
+        float: right;
+    }
+    .delete-btn:hover {
+        background-color: #b52a37;
+    }
+    .footer-buttons {
+        margin-top: 20px;
+        text-align: center;
+    }
+    .footer-buttons button {
+        margin: 5px;
+        width: auto;
+    }
+</style>
+</head>
+<body>
+
+<h1>Family Device Tracker</h1>
+
+<section id="add-device">
+    <label for="date">Date Bought:</label>
+    <input type="date" id="date">
+
+    <label for="category">Category:</label>
+    <select id="category">
+        <option>Phone</option>
+        <option>Laptop</option>
+        <option>Tablet</option>
+        <option>Other</option>
+    </select>
+
+    <label for="description">Description:</label>
+    <input type="text" id="description" placeholder="e.g., iPhone 14">
+
+    <label for="time">Time Used (hours):</label>
+    <input type="number" id="time" step="0.1" min="0">
+
+    <button id="saveBtn">Save</button>
+</section>
+
+<section class="device-list" id="deviceList"></section>
+
+<div class="footer-buttons">
+    <button id="downloadCsvBtn">Download CSV</button>
+    <input type="file" id="uploadCsvInput" accept=".csv">
+</div>
+
+<script>
+    const dateInput = document.getElementById('date');
+    const categoryInput = document.getElementById('category');
+    const descriptionInput = document.getElementById('description');
+    const timeInput = document.getElementById('time');
+    const saveBtn = document.getElementById('saveBtn');
+    const deviceList = document.getElementById('deviceList');
+    const downloadCsvBtn = document.getElementById('downloadCsvBtn');
+    const uploadCsvInput = document.getElementById('uploadCsvInput');
+
+    // Set default date to today
+    dateInput.valueAsDate = new Date();
+
+    function loadDevices() {
+        const devices = JSON.parse(localStorage.getItem('devices') || '[]');
+        return devices;
+    }
+
+    function saveDevices(devices) {
+        localStorage.setItem('devices', JSON.stringify(devices));
+    }
+
+    function renderDevices() {
+        const devices = loadDevices();
+        deviceList.innerHTML = '';
+        devices.sort((a, b) => new Date(b.date) - new Date(a.date));
+        devices.forEach((device, index) => {
+            const div = document.createElement('div');
+            div.className = 'device-item';
+            div.innerHTML = `
+                <p><strong>Date:</strong> ${device.date} 
+                   <button class="delete-btn" data-index="${index}">Delete</button>
+                </p>
+                <p><strong>Category:</strong> ${device.category}</p>
+                <p><strong>Description:</strong> ${device.description}</p>
+                <p><strong>Time Used:</strong> ${device.time} hours</p>
+            `;
+            deviceList.appendChild(div);
+        });
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = e.target.getAttribute('data-index');
+                const devices = loadDevices();
+                devices.splice(idx, 1);
+                saveDevices(devices);
+                renderDevices();
+            });
+        });
+    }
+
+    saveBtn.addEventListener('click', () => {
+        const device = {
+            date: dateInput.value,
+            category: categoryInput.value,
+            description: descriptionInput.value.trim(),
+            time: parseFloat(timeInput.value) || 0
+        };
+        if (!device.date || !device.description) {
+            alert('Please fill in date and description.');
+            return;
+        }
+        const devices = loadDevices();
+        devices.push(device);
+        saveDevices(devices);
+        renderDevices();
+        descriptionInput.value = '';
+        timeInput.value = '';
+        dateInput.valueAsDate = new Date();
+    });
+
+    downloadCsvBtn.addEventListener('click', () => {
+        const devices = loadDevices();
+        let csv = 'Date,Category,Description,Time Used\n';
+        devices.forEach(d => {
+            csv += `${d.date},${d.category},"${d.description.replace(/"/g, '""')}",${d.time}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'devices.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    uploadCsvInput.addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const text = e.target.result;
+            const lines = text.split('\n').slice(1); // skip header
+            const newDevices = [];
+            lines.forEach(line => {
+                if (line.trim() === '') return;
+                const [date, category, description, time] = line.split(',');
+                newDevices.push({
+                    date: date.trim(),
+                    category: category.trim(),
+                    description: description.replace(/^"|"$/g, '').trim(),
+                    time: parseFloat(time) || 0
+                });
+            });
+            const devices = loadDevices().concat(newDevices);
+            saveDevices(devices);
+            renderDevices();
+        };
+        reader.readAsText(file);
+    });
+
+    renderDevices();
+</script>
+
+</body>
+</html>
